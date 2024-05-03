@@ -1,13 +1,16 @@
+#大部分和data_process相同
 import colorsys
-
 import pandas as pd
 import os.path as osp
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib import font_manager as fm
 import random
+import matplotlib as mpl
+import numpy as np
 
-import warnings
-warnings.filterwarnings("ignore")
+# import warnings
+# warnings.filterwarnings("ignore")
 class init_analysis():#默认信息类，用于默认初始化dataframe信息
     FILE_ADDR = "Employee_Salaries.csv"         #输入文件名
     OUTPUT_ADDR = "end.csv"                     #输出文件名
@@ -18,6 +21,7 @@ class init_analysis():#默认信息类，用于默认初始化dataframe信息
     MODEL_CAL_EQUAL = 0
     SELECT_DICT = {'Department': [MODEL_CAL_EQUAL, 'ABS']} #默认筛选样本的字典
     CAL_DEFAULT_LIST = ['mean', 'std', 'min', '50%']#'count', 'mean', 'std', 'min', 'max', '50%'
+    DEBUG_MODEL = 1 #调试模式
     INFO = 1
     ERROR = -1
     WARNING = 0
@@ -88,20 +92,35 @@ def save_dataFarme(data_end :pd.DataFrame ,file_address:str = init_analysis.OUTP
     print(f"[info] data save {file_address} process end")
     return 1
 
-def plot_with_dataframe(data:pd.DataFrame,list_info:list ,model = 'default'):
+def plot_with_dataframe(data:pd.DataFrame,list_info:list ,model = 'default',save_model:bool = False, save_pic_addr:str = None):
+    """
+    对describe的dataframe进行可视化
+    :param data: 输入的describe处理后的数据
+    :param list_info: x轴标签和标题
+    :param model: 模式【str字符串选择】
+    :param save_model: 保存模式，默认不保存
+    :param save_pic_addr: 保存文件路径
+    :return:
+    """
 
     if list_info == None:
         print("[error] info list is empty")
         return
 
     if model == 'default':
-        fig, axs = plt.subplots(1, 4, figsize=(12, 6))
+        fig, axs = plt.subplots(1, 4, figsize=(16, 8))
         sns.lineplot(data, ax=axs[0])
         sns.boxplot(data, ax=axs[1])
         sns.barplot(data, errorbar=None, ax=axs[2])
         sns.pointplot(data, ax=axs[3])
-        # axs = set_plot_label_and_title(axs, list_info, ['_line', '_box', '_bar', 'point'])
         plt.tight_layout()
+        if save_model and save_pic_addr:
+            plt.savefig(save_pic_addr)
+            plt.clf()
+        else:
+            plt.show()
+            plt.clf()
+
         return
     flg , ax1 = plt.subplots()
     if model == 'box':
@@ -130,7 +149,8 @@ def cal_describe(data_select:pd.DataFrame, default_model:list = None):
     res_data = res_data.T
     if default_model != None:
         res_data = res_data[default_model]
-    print(res_data)
+    if init_analysis.DEBUG_MODEL:
+        print(res_data)
     return res_data.T
 def count_size_with_data(data_sorted:pd.DataFrame, label:str,start, end ):
     """
@@ -244,63 +264,186 @@ def plot_between_two_data(data_1:pd.DataFrame, data_2:pd.DataFrame, save_jpg_add
         plt.show()
     plt.clf()
 
-def generate_random_colors(n, min_lightness=0.7, max_lightness=0.9):
+def plot_with_n_scatter(data_ori_list :list, pick_label_list:list, save_model:bool = False, save_jpg_addr:str = None):
     """
-    ai生成的代码，用于生成随机颜色（用于绘制饼图自定义颜色）
-    :param n: n个随机颜色
-    :param min_lightness:最小亮度范围
-    :param max_lightness:最大亮度范围
-    :return:colors 颜色列表，能直接plt使用
+    对公司和薪资画散点图
+    :param data_ori_list:  公司数据集列表
+    :param pick_label_list: 筛选标签【必须是两个值，散点图只能接收两个】 ex:["Base_Salary","Department"]
+    :param save_model:保存模式
+    :param save_jpg_addr: 保存地址
     """
-    print_log("start random colors")
-    colors = []
-    for _ in range(n):
-        hue = random.uniform(0, 1)  # 控制色调的范围，0到1之间
-        saturation = random.uniform(0.5, 1)  # 控制饱和度的范围，0.5到1之间
-        lightness = random.uniform(min_lightness, max_lightness)  # 控制亮度的范围，自定义
-        rgb = colorsys.hls_to_rgb(hue, lightness, saturation)
-        colors.append(rgb)
-    print_log("success random colors")
-    return colors
+    if init_analysis.DEBUG_MODEL:
+        print_log("start plot scatter")
+    fig, ax = plt.subplots( figsize=(12,12) )
+    if len(pick_label_list) != 2:
+        print_log("label list len unequal 2", init_analysis.ERROR)
+        return
+    list_len = len(data_ori_list)
+    colors = mpl.cm.rainbow( np.arange(list_len) / list_len)
+    for index, data_ori in enumerate(data_ori_list):
+        data_selected = data_ori[pick_label_list]
+        sns.stripplot(data_selected, y="Department", x=pick_label_list[0], color=colors[index])
+    plt.tight_layout()
+    if save_model and save_jpg_addr:
+        plt.savefig(save_jpg_addr+""+pick_label_list[0])
+        plt.clf()
+    else:
+        print_log("success plot but not save")
+        plt.clf()
+    if init_analysis.DEBUG_MODEL:
+        print_log("success plot scatter")
 def plot_pie_chart(nums:list, label:list,title:str = None, save_model:bool = False, save_addr = None):
-    fig, ax = plt.subplots()
+
+    """
+    对原饼图进行修改 不需要使用随机生成颜色，设置了文字的大小使用归一化的连续颜色来表示
+    :param nums: 输入的数量count列表
+    :param label: 输入的标签列表
+    :param title: 标题
+    :param save_model: 保存模式
+    :param save_addr: 保存图片的地址
+    """
+    threshold = 1.2#不显示的阈值【百分比】
+    def my_autopct(pct):
+        return f'{pct:.1f}%' if pct >= threshold else None
+
+    fig, ax = plt.subplots(figsize=(8,8))
     if len(nums) != len(label):
         print("[error] nums len != label len")
         return
     len_n = len(nums)
-    colorS = generate_random_colors(len_n)
-    plt.pie(nums, labels=label, colors=colorS, autopct='%1.1f%%')
+
+    colors = mpl.cm.rainbow(np.arange(len_n) / len_n)
+
+    # patches, texts, autotexts = ax.pie(nums, labels=label, autopct='%0.1f%%',startangle=100,colors=colors)
+    patches, texts, autotexts = ax.pie(nums, labels=label, autopct=my_autopct, startangle=100, colors=colors)
+
+    proptease = fm.FontProperties()
+    proptease.set_size('x-small')
+
+    plt.setp(autotexts, fontproperties=proptease)
+    plt.setp(texts, fontproperties=proptease)
+
+    ax.axis('equal')
     plt.title(title)
     if save_model and save_addr:
         plt.savefig(save_addr)
+        plt.clf()
     else:
         plt.show()
+        plt.clf()
     return
 
+def plot_bar_with_n(data_describe_list:list, pick_label_list:list, company_list:list, select_what_salary:str = "Base_Salary", color_set:str = "	#8A2BE2",save_addr:str = None):
+    """
+    画出公司之间salary variation的条形图，可用指定多个参数，见下文
+    :param data_describe_list: 带有多个公司数据集的列表【已describe】
+    :param pick_label_list: 选取的算术标签列表【在describe的标签】
+    :param company_list: 带公司名称的列表
+    :param select_what_salary: 对哪一个薪资进行分析【默认为base salary】
+    :param color_set: 设定颜色【16进制输入】
+    :param save_addr: 保存图片地址，默认不保存
+    """
+
+    data_dict_new = dict()
+    for index, data_ori in enumerate(data_describe_list):
+        data_payed = data_ori[select_what_salary]
+        data_payed = data_payed[pick_label_list]
+        company_name = company_list[index]
+        temp_dict = {}
+        for index_label , cal_label in enumerate(pick_label_list):
+
+            if not index:
+                firm_list = list()
+                if not index_label:
+                    firm_list.append(company_name)
+                    temp_dict.update({"company_name": firm_list})
+                add_num = list()
+                add_num.append(data_payed[cal_label])
+                temp_dict.update( {cal_label: add_num }
+                                  )
+                data_dict_new.update(temp_dict)
+            else:
+                data_dict_new[cal_label].append(data_payed[cal_label])
+                if not index_label:
+                    data_dict_new["company_name"].append(company_name)
+
+
+    for index, cal_label in enumerate(pick_label_list):
+        if init_analysis.DEBUG_MODEL:
+            print_log("start plotting bar")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        plt.barh(data_dict_new["company_name"], data_dict_new[cal_label], color="#FF8C00")
+        plt.title(f"company {select_what_salary} analysis("+cal_label+")")
+        plt.xlabel("Salary")
+        if save_addr:
+            plt.savefig(save_addr+select_what_salary+"_"+cal_label)
+            plt.clf()
+            if init_analysis.DEBUG_MODEL:
+                print_log(f"success plotting {cal_label} bar in {save_addr} ")
+        else:
+            plt.show()
+            plt.clf()
+
+    return
+def department_data_analysis(data_ori:pd.DataFrame, out_min:int = 20):
+
+
+    department_dataframe_list = list()
+    department_describe_list = list()
+
+    department_label_list = data_ori["Department"].tolist()#职位列表标签
+    label_key = set(department_label_list)
+    labels_ori = list(label_key)#去重处理
+
+    label_and_count_set = dict()
+    #构造公司{名称：人员数量}字典，自动去除小于最小阈值out_min的公司
+    for temp_key in labels_ori:
+        if department_label_list.count(temp_key) >= out_min:
+            temp_set = {temp_key : department_label_list.count(temp_key)}
+            label_and_count_set.update(temp_set)
+    #从小到大排序公司样本数
+    label_and_count_set = dict(sorted( label_and_count_set.items(),key=lambda x:x[1] ) )
+    #字典的key是公司名，value是人数
+    print_log("label count:")
+    print( label_and_count_set.keys())
+    print_log("label list:")
+    print( label_and_count_set.values())
+    plot_pie_chart(list(label_and_count_set.values()), label=list(label_and_count_set.keys()), title="department_rate",
+                   save_model=True, save_addr="save_file/Department_pic/all_departments_rate")
+
+    #对每个公司对应的数据集进行划分，保存到department_dataframe_list中，处理后数据放入department_dataframe_list中，一一对应
+    for index, department_name in enumerate(label_and_count_set.keys() ):
+        department_dataframe_list.append(
+            select_some_label(data_ori=data_ori, select_dict={"Department": [init_analysis.MODEL_CAL_EQUAL, department_name]})
+            )
+        department_describe_list.append(
+            cal_describe(department_dataframe_list[index], init_analysis.CAL_DEFAULT_LIST)
+        )
+    # 对薪资数据【Base_Salary、Overtime_Pay、Longevity_Pay】进行可视化并保存
+    for index, department_name in enumerate(label_and_count_set.keys() ):
+        print_log(f"index {index} in {department_name} plot:")
+        plot_with_dataframe(department_describe_list[index],["salary", department_name],save_model=True,
+                            save_pic_addr= "save_file/Department_pic/description/"+department_name+"_description")
+        plot_one_label_histogram(department_dataframe_list[index], "Base_Salary", "save_file/Department_pic/Base_Salary/"+department_name, save_model=True, set_color_gradient=True)
+        plot_one_label_histogram(department_dataframe_list[index], "Overtime_Pay", "save_file/Department_pic/Overtime_Pay/"+department_name, save_model=True, set_color_gradient=True)
+        plot_one_label_histogram(department_dataframe_list[index], "Longevity_Pay", "save_file/Department_pic/Longevity_Pay/"+department_name, save_model=True, set_color_gradient=True)
+
+    plot_with_n_scatter(department_dataframe_list, ["Base_Salary","Department"],save_model=True,
+                        save_jpg_addr="save_file/Department_pic/Base_Salary/")
+    plot_with_n_scatter(department_dataframe_list, ["Overtime_Pay", "Department"], save_model=True,
+                        save_jpg_addr="save_file/Department_pic/Overtime_Pay/")
+    plot_with_n_scatter(department_dataframe_list, ["Longevity_Pay", "Department"], save_model=True,
+                        save_jpg_addr="save_file/Department_pic/Longevity_Pay/")
+
+    plot_bar_with_n(department_describe_list, ["mean","std","min","50%"], list(label_and_count_set.keys()),
+                    save_addr="save_file/Department_pic/Base_Salary/")
+    plot_bar_with_n(department_describe_list, ["mean", "std", "min", "50%"], list(label_and_count_set.keys()),
+                    save_addr="save_file/Department_pic/Overtime_Pay/",select_what_salary="Overtime_Pay")
+    plot_bar_with_n(department_describe_list, ["mean", "std", "min", "50%"], list(label_and_count_set.keys()),
+                    save_addr="save_file/Department_pic/Longevity_Pay/", select_what_salary="Longevity_Pay")
+    return
+
+
 if __name__ == '__main__':
-
-    M_select_dic = {'Gender': [init_analysis.MODEL_CAL_EQUAL, 'M'] }
-    F_select_dic = {'Gender': [init_analysis.MODEL_CAL_EQUAL, 'F'] }
-    data = load_and_init_dataSet()
-
-    data_M = select_some_label(data, M_select_dic)
-    data_select_M = cal_describe(data_M, init_analysis.CAL_DEFAULT_LIST)#对sex=男数据预处理
-
-    data_F = select_some_label(data, F_select_dic)                      #筛选标签【这里是以女性别为筛选条件】
-    data_select_F = cal_describe(data_F, init_analysis.CAL_DEFAULT_LIST)#计算Female各类数据
-    plot_between_two_data(data_select_F, data_select_M, save_model=True, save_jpg_addr="save_file/gender_pic/output.jpg")                 #展示男女之间薪资差异图
-
-
-    plot_one_label_histogram(data_F, "Base_Salary", "save_file/gender_pic/Base_Salary_F_t.jpg", save_model=True, set_color_gradient=True)
-    plot_one_label_histogram(data_F, "Overtime_Pay", "save_file/gender_pic/Overtime_Pay_F.jpg", save_model=True)
-    plot_one_label_histogram(data_F, "Longevity_Pay", "save_file/gender_pic/Longevity_Pay_F.jpg", save_model=True)
-
-    plot_one_label_histogram(data_M, "Base_Salary", "save_file/gender_pic/Base_Salary_M_t.jpg", save_model=True, set_color_gradient=True)
-    plot_one_label_histogram(data_M, "Overtime_Pay", "save_file/gender_pic/Overtime_Pay_M.jpg", save_model=True)
-    plot_one_label_histogram(data_M, "Longevity_Pay", "save_file/gender_pic/Longevity_Pay_M.jpg", save_model=True)
-    sizes = [len(data_F), len(data_M)]
-    labels = ['Female', 'Male']
-    plot_pie_chart(sizes, labels, "Female_and_Male_rate",save_model=True,save_addr="save_file/gender_pic/Gender_rate.jpg")
-    # save_dataFarme(data_select_M, "save_file/end_M.xlsx")
-    # save_dataFarme(data_select_F, "save_file/end_F.xlsx")
-
+    data_ori = load_and_init_dataSet()
+    department_data_analysis(data_ori,78)
